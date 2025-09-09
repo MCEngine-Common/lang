@@ -82,6 +82,15 @@ public final class MCEngineLangCommand implements CommandExecutor {
                 return true;
             }
             String langArg = args[1];
+            String current = langCommon.getLang(player);
+
+            // Prevent re-setting the same language
+            if (current.equalsIgnoreCase(langArg)) {
+                sender.sendMessage(ChatColor.YELLOW + "Language is already set to " + ChatColor.AQUA + current);
+                sender.sendMessage(ChatColor.YELLOW + "Use /" + label + " change instead.");
+                return true;
+            }
+
             langCommon.setLang(player, langArg);
             String now = langCommon.getLang(player);
             sender.sendMessage(ChatColor.GREEN + "Language set to: " + ChatColor.AQUA + now);
