@@ -1,6 +1,9 @@
 package io.github.mcengine.common.lang.database.sqlite;
 
 import io.github.mcengine.common.lang.database.IMCEngineLangDB;
+import io.github.mcengine.common.lang.database.sqlite.util.changeLangUtil;
+import io.github.mcengine.common.lang.database.sqlite.util.getLangUtil;
+import io.github.mcengine.common.lang.database.sqlite.util.setLangUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
@@ -17,6 +20,11 @@ import java.sql.*;
  *   lang        TEXT NOT NULL DEFAULT 'en_US'
  * );
  * </pre>
+ *
+ * <p>
+ * Contract methods delegate their SQL to focused util classes under
+ * {@code io.github.mcengine.common.lang.database.sqlite.util}.
+ * </p>
  */
 public final class MCEngineLangSQLite implements IMCEngineLangDB {
 
@@ -26,7 +34,12 @@ public final class MCEngineLangSQLite implements IMCEngineLangDB {
     /** JDBC URL for the SQLite database file. */
     private final String databaseUrl;
 
-    /** Shared SQLite connection for this instance. */
+    /**
+     * Persistent SQLite JDBC connection shared by this implementation.
+     * <p>
+     * @implNote Contract methods delegate their SQL to small, focused utility classes
+     * (one util per method) that expose a static {@code invoke(...)} entrypoint.
+     */
     private final Connection conn;
 
     /**
@@ -90,60 +103,18 @@ public final class MCEngineLangSQLite implements IMCEngineLangDB {
     /** {@inheritDoc} */
     @Override
     public String getLang(Player player) {
-        if (this.conn == null) return "en_US";
-        final String uuid = player.getUniqueId().toString();
-        try (PreparedStatement ps = conn.prepareStatement("SELECT lang FROM lang WHERE player_uuid=?")) {
-            ps.setString(1, uuid);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getString(1);
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().warning("SQLite getLang failed: " + e.getMessage());
-        }
-        return "en_US";
+        return getLangUtil.invoke(this.conn, this.plugin, player);
     }
 
     /** {@inheritDoc} */
     @Override
     public void setLang(Player player, String langType) {
-        if (this.conn == null) return;
-        final String uuid = player.getUniqueId().toString();
-        try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT INTO lang (player_uuid, lang) VALUES (?, ?) " +
-                "ON CONFLICT(player_uuid) DO UPDATE SET lang=excluded.lang")) {
-            ps.setString(1, uuid);
-            ps.setString(2, langType);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            plugin.getLogger().warning("SQLite setLang failed: " + e.getMessage());
-        }
+        setLangUtil.invoke(this.conn, this.plugin, player, langType);
     }
 
     /** {@inheritDoc} */
     @Override
     public boolean changeLang(Player player, String newLangType) {
-        if (this.conn == null) return false;
-        final String uuid = player.getUniqueId().toString();
-        try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE lang SET lang=? WHERE player_uuid=? AND lang<>?")) {
-            ps.setString(1, newLangType);
-            ps.setString(2, uuid);
-            ps.setString(3, newLangType);
-            int updated = ps.executeUpdate();
-            if (updated == 0) {
-                // If row doesn't exist, insert with newLangType
-                try (PreparedStatement ins = conn.prepareStatement(
-                        "INSERT INTO lang (player_uuid, lang) VALUES (?, ?) " +
-                        "ON CONFLICT(player_uuid) DO UPDATE SET lang=excluded.lang")) {
-                    ins.setString(1, uuid);
-                    ins.setString(2, newLangType);
-                    return ins.executeUpdate() > 0;
-                }
-            }
-            return updated > 0;
-        } catch (SQLException e) {
-            plugin.getLogger().warning("SQLite changeLang failed: " + e.getMessage());
-            return false;
-        }
+        return changeLangUtil.invoke(this.conn, this.plugin, player, newLangType);
     }
 }
