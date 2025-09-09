@@ -4,12 +4,23 @@ import io.github.mcengine.common.lang.database.IMCEngineLangDB;
 import io.github.mcengine.common.lang.database.mysql.MCEngineLangMySQL;
 import io.github.mcengine.common.lang.database.postgresql.MCEngineLangPostgreSQL;
 import io.github.mcengine.common.lang.database.sqlite.MCEngineLangSQLite;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
+import java.io.File;
+
 /**
  * Wires a Bukkit {@link Plugin} to an {@link IMCEngineLangDB} backend and exposes
- * simple methods to get/set/change player language preferences.
+ * simple methods to get/set/change player language preferences, including resolving
+ * text from YAML bundles located under:
+ * <pre>{pluginDataFolder}/lang/{lang}.yml</pre>
+ *
+ * <p>
+ * Language codes are normalized before use: they are converted to lower case and
+ * underscores are replaced with hyphens (e.g., {@code en_us → en-us}).
+ * </p>
  */
 public final class MCEngineLangCommon {
 
@@ -21,6 +32,15 @@ public final class MCEngineLangCommon {
 
     /** Database interface used by the Lang module. */
     private final IMCEngineLangDB db;
+
+    /** Name of the language directory under a plugin's data folder. */
+    private static final String LANG_DIR_NAME = "lang";
+
+    /** File extension for language bundles. */
+    private static final String YAML_EXTENSION = ".yml";
+
+    /** Default language code when none is stored or the bundle is missing. */
+    private static final String DEFAULT_LANG = "en-us";
 
     /**
      * Constructs the Lang API and selects the database implementation from config
@@ -54,12 +74,75 @@ public final class MCEngineLangCommon {
     // Delegated operations
     // ------------------------------
 
-    /** @return player's saved language or "en_US" if absent */
-    public String getLang(Player player) { return db.getLang(player); }
+    /** @return player's saved language (normalized) or "en-us" if absent */
+    public String getLang(Player player) {
+        return normalizeLang(db.getLang(player));
+    }
 
-    /** Insert/update player's language. */
-    public void setLang(Player player, String langType) { db.setLang(player, langType); }
+    /** Insert/update player's language (stored normalized). */
+    public void setLang(Player player, String langType) {
+        db.setLang(player, normalizeLang(langType));
+    }
 
     /** Change player's language if different; returns true if updated. */
-    public boolean changeLang(Player player, String newLangType) { return db.changeLang(player, newLangType); }
+    public boolean changeLang(Player player, String newLangType) {
+        return db.changeLang(player, normalizeLang(newLangType));
+    }
+
+    // ------------------------------
+    // YAML resolution
+    // ------------------------------
+
+    /**
+     * Resolve a localized text from <code>{pluginDataFolder}/lang/{lang}.yml</code> using a YAML key.
+     *
+     * <p>Language code is normalized (lower case, underscores → hyphens).</p>
+     *
+     * @param plugin        the plugin owning the language files (data folder root)
+     * @param player        the player whose language should be used
+     * @param variableName  YAML path/key to look up (e.g., {@code ui.menu.title})
+     * @return localized value if found; otherwise {@code null}
+     */
+    public String getLangTextFromYml(Plugin plugin, Player player, String variableName) {
+        String code = getLang(player); // already normalized
+        File langFile = resolveLangFile(plugin, code);
+
+        FileConfiguration cfg = YamlConfiguration.loadConfiguration(langFile);
+        String value = cfg.getString(variableName);
+
+        if (value == null && !DEFAULT_LANG.equals(code)) {
+            File defFile = resolveLangFile(plugin, DEFAULT_LANG);
+            FileConfiguration defCfg = YamlConfiguration.loadConfiguration(defFile);
+            value = defCfg.getString(variableName);
+        }
+
+        return value;
+    }
+
+    /**
+     * Builds a {@link File} pointing to the bundle for a language code.
+     * Falls back to default when missing.
+     */
+    private File resolveLangFile(Plugin plugin, String code) {
+        File baseDir = plugin.getDataFolder();
+        File file = new File(new File(baseDir, LANG_DIR_NAME), code + YAML_EXTENSION);
+        if (file.isFile()) return file;
+        return new File(new File(baseDir, LANG_DIR_NAME), DEFAULT_LANG + YAML_EXTENSION);
+    }
+
+    /**
+     * Normalizes language codes to lowercase and replaces underscores with hyphens.
+     * <ul>
+     *   <li>{@code en_US → en-us}</li>
+     *   <li>{@code zh_TW → zh-tw}</li>
+     *   <li>{@code FR → fr}</li>
+     * </ul>
+     *
+     * @param input raw code from DB or config
+     * @return normalized code, never null (falls back to "en-us")
+     */
+    private static String normalizeLang(String input) {
+        if (input == null || input.isBlank()) return DEFAULT_LANG;
+        return input.toLowerCase().replace('_', '-');
+    }
 }
