@@ -31,6 +31,15 @@ public final class MCEngineLangCommand implements CommandExecutor {
     /** Shared Lang API facade. */
     private final MCEngineLangCommon langCommon;
 
+    /** Permission required to use the /lang command at all. */
+    private static final String PERM_USE = "mcengine.lang.use";
+
+    /** Permission required to run subcommand {@code set}. */
+    private static final String PERM_SET = "mcengine.lang.set";
+
+    /** Permission required to run subcommand {@code change}. */
+    private static final String PERM_CHANGE = "mcengine.lang.change";
+
     /**
      * Constructs the {@code /lang} command executor.
      *
@@ -49,6 +58,12 @@ public final class MCEngineLangCommand implements CommandExecutor {
             return true;
         }
 
+        // Base permission gate
+        if (!sender.hasPermission(PERM_USE)) {
+            sender.sendMessage(ChatColor.RED + "You don't have permission to use /" + label + ".");
+            return true;
+        }
+
         if (args.length == 0) {
             String current = langCommon.getLang(player);
             sender.sendMessage(ChatColor.YELLOW + "Your language is: " + ChatColor.GREEN + current);
@@ -57,28 +72,40 @@ public final class MCEngineLangCommand implements CommandExecutor {
         }
 
         String sub = args[0].toLowerCase();
-        if (("set".equals(sub) || "change".equals(sub))) {
+        if ("set".equals(sub)) {
+            if (!sender.hasPermission(PERM_SET)) {
+                sender.sendMessage(ChatColor.RED + "You don't have permission to use /" + label + " set.");
+                return true;
+            }
             if (args.length < 2) {
-                sender.sendMessage(ChatColor.RED + "Missing <lang>. Example: /" + label + " " + sub + " en-us");
+                sender.sendMessage(ChatColor.RED + "Missing <lang>. Example: /" + label + " set en-us");
                 return true;
             }
             String langArg = args[1];
+            langCommon.setLang(player, langArg);
+            String now = langCommon.getLang(player);
+            sender.sendMessage(ChatColor.GREEN + "Language set to: " + ChatColor.AQUA + now);
+            return true;
+        }
 
-            if ("set".equals(sub)) {
-                langCommon.setLang(player, langArg);
-                String now = langCommon.getLang(player);
-                sender.sendMessage(ChatColor.GREEN + "Language set to: " + ChatColor.AQUA + now);
-                return true;
-            } else {
-                boolean changed = langCommon.changeLang(player, langArg);
-                String now = langCommon.getLang(player);
-                if (changed) {
-                    sender.sendMessage(ChatColor.GREEN + "Language changed to: " + ChatColor.AQUA + now);
-                } else {
-                    sender.sendMessage(ChatColor.YELLOW + "No change applied. Current language: " + ChatColor.AQUA + now);
-                }
+        if ("change".equals(sub)) {
+            if (!sender.hasPermission(PERM_CHANGE)) {
+                sender.sendMessage(ChatColor.RED + "You don't have permission to use /" + label + " change.");
                 return true;
             }
+            if (args.length < 2) {
+                sender.sendMessage(ChatColor.RED + "Missing <lang>. Example: /" + label + " change en-us");
+                return true;
+            }
+            String langArg = args[1];
+            boolean changed = langCommon.changeLang(player, langArg);
+            String now = langCommon.getLang(player);
+            if (changed) {
+                sender.sendMessage(ChatColor.GREEN + "Language changed to: " + ChatColor.AQUA + now);
+            } else {
+                sender.sendMessage(ChatColor.YELLOW + "No change applied. Current language: " + ChatColor.AQUA + now);
+            }
+            return true;
         }
 
         sender.sendMessage(ChatColor.RED + "Unknown subcommand: " + args[0]);
