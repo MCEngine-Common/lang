@@ -30,11 +30,16 @@ public final class MCEngineLangPostgreSQL implements IMCEngineLangDB {
     /** Owning plugin for configuration and logging. */
     private final Plugin plugin;
 
-    /** JDBC URL and credentials from config. */
+    /** JDBC URL built from config (host/port/db). */
     private final String jdbcUrl;
-    private final String user, pass;
 
-    /** Shared PostgreSQL connection for this instance. */
+    /** Database username used by this implementation. */
+    private final String user;
+
+    /** Database password used by this implementation. */
+    private final String pass;
+
+    /** Persistent PostgreSQL JDBC connection for this instance. */
     private final Connection conn;
 
     public MCEngineLangPostgreSQL(Plugin plugin) {
@@ -74,8 +79,34 @@ public final class MCEngineLangPostgreSQL implements IMCEngineLangDB {
 
     /** {@inheritDoc} */
     @Override
-    public Connection getConnection(Connection conn) {
-        return (conn != null) ? conn : this.conn;
+    public void executeQuery(String query) {
+        try (Statement st = conn.createStatement()) {
+            st.execute(query);
+        } catch (SQLException e) {
+            plugin.getLogger().warning("PostgreSQL (Lang) executeQuery failed: " + e.getMessage());
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getValue(String query, Class<T> type) {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(query)) {
+            if (rs.next()) {
+                Object v;
+                if (type == String.class) v = rs.getString(1);
+                else if (type == Integer.class) v = rs.getInt(1);
+                else if (type == Long.class) v = rs.getLong(1);
+                else if (type == Double.class) v = rs.getDouble(1);
+                else if (type == Boolean.class) v = rs.getBoolean(1);
+                else throw new IllegalArgumentException("Unsupported return type: " + type);
+                return (T) v;
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().warning("PostgreSQL (Lang) getValue failed: " + e.getMessage());
+        }
+        return null;
     }
 
     /** {@inheritDoc} */
