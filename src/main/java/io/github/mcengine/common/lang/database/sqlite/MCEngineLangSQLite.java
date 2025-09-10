@@ -31,14 +31,13 @@ public final class MCEngineLangSQLite implements IMCEngineLangDB {
     /** Owning plugin for configuration and logging. */
     private final Plugin plugin;
 
-    /** JDBC URL for the SQLite database file. */
+    /** Full JDBC URL for the SQLite database file. */
     private final String databaseUrl;
 
     /**
      * Persistent SQLite JDBC connection shared by this implementation.
-     * <p>
-     * @implNote Contract methods delegate their SQL to small, focused utility classes
-     * (one util per method) that expose a static {@code invoke(...)} entrypoint.
+     * @implNote Contract methods delegate SQL to small utility classes
+     * via their static {@code invoke(...)} entry points.
      */
     private final Connection conn;
 
@@ -96,8 +95,34 @@ public final class MCEngineLangSQLite implements IMCEngineLangDB {
 
     /** {@inheritDoc} */
     @Override
-    public Connection getConnection(Connection conn) {
-        return (conn != null) ? conn : this.conn;
+    public void executeQuery(String query) {
+        try (Statement st = conn.createStatement()) {
+            st.execute(query);
+        } catch (SQLException e) {
+            plugin.getLogger().warning("SQLite (Lang) executeQuery failed: " + e.getMessage());
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getValue(String query, Class<T> type) {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(query)) {
+            if (rs.next()) {
+                Object v;
+                if (type == String.class) v = rs.getString(1);
+                else if (type == Integer.class) v = rs.getInt(1);
+                else if (type == Long.class) v = rs.getLong(1);
+                else if (type == Double.class) v = rs.getDouble(1);
+                else if (type == Boolean.class) v = rs.getBoolean(1);
+                else throw new IllegalArgumentException("Unsupported return type: " + type);
+                return (T) v;
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().warning("SQLite (Lang) getValue failed: " + e.getMessage());
+        }
+        return null;
     }
 
     /** {@inheritDoc} */

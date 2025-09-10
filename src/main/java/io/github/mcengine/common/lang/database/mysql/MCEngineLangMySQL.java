@@ -30,11 +30,16 @@ public final class MCEngineLangMySQL implements IMCEngineLangDB {
     /** Owning plugin for configuration and logging. */
     private final Plugin plugin;
 
-    /** JDBC URL and credentials from config. */
+    /** JDBC URL built from config (host/port/db). */
     private final String jdbcUrl;
-    private final String user, pass;
 
-    /** Shared MySQL connection for this instance. */
+    /** Database username used by this implementation. */
+    private final String user;
+
+    /** Database password used by this implementation. */
+    private final String pass;
+
+    /** Persistent MySQL JDBC connection for this instance. */
     private final Connection conn;
 
     public MCEngineLangMySQL(Plugin plugin) {
@@ -69,7 +74,6 @@ public final class MCEngineLangMySQL implements IMCEngineLangDB {
                 "  lang        VARCHAR(32) NOT NULL DEFAULT 'en_US'" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             );
-            // Some MySQL variants may not support IF NOT EXISTS for indexes with this syntax:
             try {
                 st.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lang_lang ON lang(lang)");
             } catch (SQLException ignored) {
@@ -82,8 +86,34 @@ public final class MCEngineLangMySQL implements IMCEngineLangDB {
 
     /** {@inheritDoc} */
     @Override
-    public Connection getConnection(Connection conn) {
-        return (conn != null) ? conn : this.conn;
+    public void executeQuery(String query) {
+        try (Statement st = conn.createStatement()) {
+            st.execute(query);
+        } catch (SQLException e) {
+            plugin.getLogger().warning("MySQL (Lang) executeQuery failed: " + e.getMessage());
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T getValue(String query, Class<T> type) {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(query)) {
+            if (rs.next()) {
+                Object v;
+                if (type == String.class) v = rs.getString(1);
+                else if (type == Integer.class) v = rs.getInt(1);
+                else if (type == Long.class) v = rs.getLong(1);
+                else if (type == Double.class) v = rs.getDouble(1);
+                else if (type == Boolean.class) v = rs.getBoolean(1);
+                else throw new IllegalArgumentException("Unsupported return type: " + type);
+                return (T) v;
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().warning("MySQL (Lang) getValue failed: " + e.getMessage());
+        }
+        return null;
     }
 
     /** {@inheritDoc} */

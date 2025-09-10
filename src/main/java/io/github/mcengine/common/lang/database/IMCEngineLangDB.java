@@ -2,14 +2,12 @@ package io.github.mcengine.common.lang.database;
 
 import org.bukkit.entity.Player;
 
-import java.sql.Connection;
-
 /**
  * Contract for the MCEngine Lang database layer.
  *
  * <p>
  * This interface abstracts how player language preferences are stored and retrieved
- * from a relational database. Implementations must ensure the following table exists:
+ * from a database. Implementations must ensure the following table exists:
  * </p>
  *
  * <pre>
@@ -31,14 +29,24 @@ import java.sql.Connection;
 public interface IMCEngineLangDB {
 
     /**
-     * Returns an open {@link Connection} to the database. If a non-null {@code conn}
-     * is provided, implementations may simply return that instance. Otherwise, they
-     * should return their internally managed connection.
+     * Executes a backend-specific non-returning command (DDL/DML).
+     * <p>For SQL backends, this is raw SQL. For NoSQL backends, this could be JSON/DSL.</p>
      *
-     * @param conn optional hint/override; if non-null, may be returned as-is
-     * @return an open JDBC connection, or {@code null} if unavailable
+     * @param query command to execute
      */
-    Connection getConnection(Connection conn);
+    void executeQuery(String query);
+
+    /**
+     * Executes a backend-specific query that returns a single value (one row, one column).
+     * <p>For SQL backends, this is a {@code SELECT} returning a single column.</p>
+     *
+     * @param query query/command to execute
+     * @param type  expected Java type ({@code String, Integer, Long, Double, Boolean}, etc.)
+     * @param <T>   generic return type
+     * @return value if present; otherwise {@code null}
+     * @throws IllegalArgumentException if {@code type} is unsupported
+     */
+    <T> T getValue(String query, Class<T> type);
 
     /**
      * Reads the player's language code from the {@code lang} table.

@@ -71,6 +71,31 @@ public final class MCEngineLangCommon {
     public IMCEngineLangDB getDB() { return db; }
 
     // ------------------------------
+    // Pass-through query helpers (parity with Economy)
+    // ------------------------------
+
+    /**
+     * Executes a backend-specific non-returning command (DDL/DML).
+     *
+     * @param query SQL (for SQL backends) or DSL/JSON (for NoSQL backends)
+     */
+    public void executeQuery(String query) {
+        db.executeQuery(query);
+    }
+
+    /**
+     * Executes a backend-specific query that returns a single value.
+     *
+     * @param query SQL/DSL command string
+     * @param type  expected Java type
+     * @param <T>   generic type
+     * @return value if present; otherwise {@code null}
+     */
+    public <T> T getValue(String query, Class<T> type) {
+        return db.getValue(query, type);
+    }
+
+    // ------------------------------
     // Delegated operations
     // ------------------------------
 
